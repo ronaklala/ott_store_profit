@@ -20,30 +20,37 @@ const Home = () => {
       {
         type: "line",
         xKey: "date",
-        yKey: "Sale",
-        yName: "Sale",
+        yKey: "sale",
+        yName: "sale",
       },
       {
         type: "line",
         xKey: "date",
-        yKey: "Profit",
-        yName: "Profit",
+        yKey: "profit",
+        yName: "profit",
       },
     ],
   });
 
-  const [options, setOptions] = useState({
-    // Data: Data to be displayed in the chart
-    data: [
-      { month: "Jan", avgTemp: 2.3, iceCreamSales: 162000 },
-      { month: "Mar", avgTemp: 6.3, iceCreamSales: 302000 },
-      { month: "May", avgTemp: 16.2, iceCreamSales: 800000 },
-      { month: "Jul", avgTemp: 22.8, iceCreamSales: 1254000 },
-      { month: "Sep", avgTemp: 14.5, iceCreamSales: 950000 },
-      { month: "Nov", avgTemp: 8.9, iceCreamSales: 200000 },
+  const [monthWiseCategory, setMonthWiseCategory] = useState({
+    data: [],
+    series: [
+      {
+        type: "pie",
+        angleKey: "amount",
+        legendItemKey: "asset",
+      },
     ],
+  });
+
+  const [yearlyReport, setYearlyReport] = useState({
+    // Data: Data to be displayed in the chart
+    data: [],
     // Series: Defines which chart type and data to use
-    series: [{ type: "bar", xKey: "month", yKey: "iceCreamSales" }],
+    series: [
+      { type: "bar", xKey: "month", yKey: "sales", yName: "sale" },
+      { type: "bar", xKey: "month", yKey: "profit", yName: "profit" },
+    ],
   });
 
   useEffect(() => {
@@ -51,7 +58,11 @@ const Home = () => {
     fetchTotalSalesToday(setTotalSalesToday);
     fetchTotalProfit(setTotalProfit);
     fetchTotalProfitToday(setTotalProfitToday);
-    fetchMonthlySales(setTotalMonthlySales);
+    fetchMonthlySales(
+      setTotalMonthlySales,
+      setMonthWiseCategory,
+      setYearlyReport
+    );
   }, []);
 
   return (
@@ -189,7 +200,7 @@ const Home = () => {
                     </select>
                   </div>
                 </div>
-                <AgCharts options={options} />
+                <AgCharts options={yearlyReport} />
               </div>
             </div>
           </div>
@@ -216,7 +227,7 @@ const Home = () => {
                 <div className="col-xl-12 mt-4">
                   <div className="card rounded shadow border-0 p-4">
                     <div className="d-flex justify-content-between mb-4">
-                      <h6 className="mb-0">Monthly Top Sold Items</h6>
+                      <h6 className="mb-0">Monthly Sold Items</h6>
                       <div className="text-end">
                         <h6 className="text-muted mb-0">
                           {new Date().toLocaleString("en-US", {
@@ -225,7 +236,7 @@ const Home = () => {
                         </h6>
                       </div>
                     </div>
-                    <div id="top-product-chart" />
+                    <AgCharts options={monthWiseCategory} />
                   </div>
                 </div>
                 {/*end col*/}

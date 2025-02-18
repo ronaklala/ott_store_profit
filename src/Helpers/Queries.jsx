@@ -197,66 +197,147 @@ export const fetchTotalProfitToday = async (setTotalProfitToday) => {
     console.error("Error fetching total profit today:", error);
   }
 };
-export const fetchMonthlySales = async (setTotalMonthlySales) => {
+
+export const fetchMonthlySales = async (
+  setTotalMonthlySales,
+  setMonthWiseCategory,
+  setYearlyReport
+) => {
   try {
     // Get the current month and year
     const today = new Date();
     const currentMonth = today.getMonth() + 1; // JavaScript months are 0-based, so +1
     const currentYear = today.getFullYear();
 
-    // Fetch data from Sheet1 (A2:F)
-    const urlSheet1 = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values/${SHEET_NAME}!A2:F?key=${API_KEY}`;
-    const response = await axios.get(urlSheet1);
+    // Fetch data from both sheets
+    const sheet1URL = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values/${SHEET_NAME}!A2:F?key=${API_KEY}`;
+    const sheet2URL = `https://sheets.googleapis.com/v4/spreadsheets/1frJJO0XBdRtgbObJ8_Ia9ow8W9yQs-CvlnhRVadVQEY/values/Sheet1!E2:H?key=${API_KEY}`;
 
-    const data = response.data.values;
-    if (!data) return;
+    const [response1, response2] = await Promise.all([
+      axios.get(sheet1URL),
+      axios.get(sheet2URL),
+    ]);
 
-    // Object to store sum for each date
-    const salesData = {};
+    const data1 = response1.data.values;
+    const data2 = response2.data.values;
+    if (!data1 || !data2) return;
 
-    data.forEach((row) => {
+    // Objects to store aggregated data
+    const salesData = {}; // Daily sales data for the current month
+    const assetCount = {}; // Asset distribution
+    const yearlySales = {}; // Yearly sales report (month-wise)
+
+    // ✅ Process Sheet 1 Data
+    data1.forEach((row) => {
       const amount = parseFloat(row[0]) || 0; // Column A (amount)
       const profit = parseFloat(row[1]) || 0; // Column B (profit)
       const dateStr = row[4]; // Column E (date in DD/MM/YYYY format)
+      const asset = row[5]?.trim(); // Column F (category/asset)
 
       if (dateStr) {
         // Extract day, month, and year from the date
         const [day, month, year] = dateStr.split("/").map(Number);
 
-        // Check if the date is in the current month and year
+        // ✅ Yearly Report (Aggregating Monthly Sales)
+        if (year === currentYear) {
+          if (!yearlySales[month]) {
+            yearlySales[month] = { sales: 0, profit: 0 };
+          }
+          yearlySales[month].sales += amount;
+          yearlySales[month].profit += profit;
+        }
+
+        // ✅ Current Month Sales & Asset Distribution
         if (month === currentMonth && year === currentYear) {
           const formattedDate = `${day}/${month}/${year}`;
 
-          // Initialize object for this date if not present
+          // --- Daily Sales Data ---
           if (!salesData[formattedDate]) {
             salesData[formattedDate] = { sale: 0, profit: 0 };
           }
-
-          // Sum up the values for each day
           salesData[formattedDate].sale += amount;
           salesData[formattedDate].profit += profit;
+
+          // --- Asset Count ---
+          if (asset) {
+            assetCount[asset] = (assetCount[asset] || 0) + 1;
+          }
         }
       }
     });
 
-    // Convert to array format [{ date: "DD/MM/YYYY", sale: total, profit: total }]
-    const result = Object.entries(salesData).map(([date, values]) => ({
-      date,
-      Sale: values.sale,
-      Profit: values.profit,
+    // ✅ Process Sheet 2 Data (MM/DD/YY Format)
+    data2.forEach((row) => {
+      const dateStr = row[0]; // Column E (Date in MM/DD/YY format)
+      const amount = parseFloat(row[3]) || 0; // Column H (Amount)
+
+      if (dateStr) {
+        // Extract month, day, and year from the date
+        const [month, day, year] = dateStr.split("/").map(Number);
+        const fullYear = year; // Convert YY to YYYY format (assuming this approach for 2-digit year)
+
+        // ✅ Yearly Report (Add amount to both sales & profit)
+        if (fullYear === currentYear) {
+          if (!yearlySales[month]) {
+            yearlySales[month] = { sales: 0, profit: 0 };
+          }
+          yearlySales[month].sales += amount;
+          yearlySales[month].profit += amount;
+        }
+      }
+    });
+
+    // Convert daily sales data to array [{ date: "DD", sale: total, profit: total }]
+    const dailySales = Object.entries(salesData).map(([date, values]) => ({
+      date: date.split("/")[0], // Keep only the day
+      sale: values.sale,
+      profit: values.profit,
     }));
 
-    // Format the date to keep only the day
-    const finalResult = result.map((item) => ({
-      date: item.date.split("/")[0], // Keep only the first part before '/'
-      Sale: item.Sale,
-      Profit: item.Profit,
+    // Convert asset counts into array [{ asset: "Category", amount: count }]
+    const assetDistribution = Object.entries(assetCount).map(
+      ([asset, amount]) => ({
+        asset,
+        amount,
+      })
+    );
+
+    // Convert yearly sales data to array [{ month: "January", sales: total, profit: total }]
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const yearlyReport = Object.entries(yearlySales).map(([month, values]) => ({
+      month: monthNames[month - 1], // Convert month index to name
+      sales: values.sales,
+      profit: values.profit,
     }));
 
-    // Set state with formatted sales data
+    // ✅ Update States
     setTotalMonthlySales((prevState) => ({
       ...prevState,
-      data: finalResult, // Updating only 'data'
+      data: dailySales, // Updating only 'data'
+    }));
+
+    setMonthWiseCategory((prevState) => ({
+      ...prevState,
+      data: assetDistribution, // Updating only 'data'
+    }));
+
+    setYearlyReport((prevState) => ({
+      ...prevState,
+      data: yearlyReport, // Updating only 'data'
     }));
   } catch (error) {
     console.error("Error fetching monthly sales:", error);
